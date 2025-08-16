@@ -5,21 +5,24 @@
 ; -----------------------------------------------------
 
 ; --- Universal Constants (Optimized & Consolidated) ---
-var %hbar = 1.0545718e-34       ; Reduced Planck constant (Joule-seconds)
-var %kB = 1.380649e-23          ; Boltzmann constant (Joules per Kelvin)
-var %pi = 3.1415926535          ; Precomputed Pi for efficiency and consistency
-var %c = 299792458              ; Speed of light (m/s)
-var %epsilon = 1e-12            ; Small value for floating-point comparisons (Optimization: Increased precision for comparisons)
+; Constants are expected to be loaded from constants.mrc
+; Ensure constants.mrc is loaded BEFORE this script.
+; Example: var %hbar = 1.0545718e-34       ; Reduced Planck constant (Joule-seconds)
+; Example: var %kB = 1.380649e-23          ; Boltzmann constant (Joules per Kelvin)
+; Example: var %pi = 3.1415926535          ; Precomputed Pi for efficiency and consistency
+; Example: var %c = 299792458              ; Speed of light (m/s)
+; Example: var %epsilon = 1e-12            ; Small value for floating-point comparisons (Optimization: Increased precision for comparisons)
+; Example: var %planck_h = $calc(2 * %pi * %hbar) ; Planck constant h = 2*pi*hbar
+; Example: var %hbar_div_2 = $calc(%hbar / 2)     ; Pre-calculated for Uncertainty Principle
 
-var %planck_h = $calc(2 * %pi * %hbar) ; Planck constant h = 2*pi*hbar
-var %hbar_div_2 = $calc(%hbar / 2)     ; Pre-calculated for Uncertainty Principle
 
 ; --- Error String (Standardized Error Handling) ---
 ; All functions will return this string on an unrecoverable error.
 var %ERR_RETURN = "_ERROR_"
 var %STATE_SUPERPOSITION = "SUPERPOSITION" ; Constant for decoherence simulation state
 
-; --- Helper Functions for Validation (Optimization: Centralized validation logic) ---
+; --- Helper Functions for Validation (Centralized for consistency) ---
+; These helpers are assumed to be consistent with 'emergent_systems.mrc' and 'sensory.mrc'.
 
 ; Alias: is_positive_num
 ; Description: Checks if a value is a positive number.
@@ -36,6 +39,7 @@ alias is_non_negative_integer {
 }
 
 ; --- Complex Number Arithmetic Helpers (Optimized for error handling and performance) ---
+; These helpers are assumed to be consistent with 'emergent_systems.mrc' and 'sensory.mrc'.
 ; MIRC does not natively support complex numbers.
 ; We represent a complex number A = ar + ai*i as two separate arguments: ar (real part), ai (imaginary part).
 ; Functions return a comma-separated string "real_part,imag_part" or "_ERROR_" on invalid input.
@@ -47,7 +51,8 @@ alias is_non_negative_integer {
 alias c_validate_parts {
     var %i = 1, %valid = 1
     while (%i <= $argc) {
-        if (!($isnum( $$($i) ))) {
+        ; Use $varg to safely access arguments dynamically
+        if (!($isnum($varg(%i)))) {
             %valid = 0
             break
         }
@@ -124,7 +129,7 @@ alias c_div {
     if ($argc != 4) { return %ERR_RETURN $+ :InvalidArgCount }
     if (!($c_validate_parts($1,$2,$3,$4))) { return %ERR_RETURN $+ :InvalidComplexParts }
     var %denominator = $calc(($3 * $3) + ($4 * $4))
-    ; Bug Fix: Use epsilon for float division by zero check
+    ; Use %epsilon for float division by zero check, assuming it's globally available
     if ($calc(abs(%denominator)) < %epsilon) { return %ERR_RETURN $+ :DivisionByZero }
     var %real_num = $calc(($1 * $3) + ($2 * $4))
     var %imag_num = $calc(($2 * $3) - ($1 * $4))
@@ -140,6 +145,7 @@ alias c_div {
 alias c_is_zero_approx {
     if ($argc != 2) { return %ERR_RETURN $+ :InvalidArgCount }
     if (!($c_validate_parts($1,$2))) { return %ERR_RETURN $+ :InvalidComplexParts }
+    ; Use %epsilon, assuming it's globally available
     if ($calc(abs($1)) < %epsilon && $calc(abs($2)) < %epsilon) {
         return 1
     }
@@ -150,7 +156,7 @@ alias c_is_zero_approx {
 
 ; Alias: schrodinger_time_independent_check
 ; Description: Checks if H|psi> = E|psi> for given scalar H, psi, and E values within a tolerance.
-;              In MIRC, this is a simplified representation where H, psi, E are treated as scalars.
+;              In MIRC, this is a simplified representation where H, psi, E are treated as complex scalars.
 ; Parameters: %H_real, %H_imag, %psi_real, %psi_imag, %E_real, %E_imag
 ; Returns: 1 if equation holds approximately, 0 otherwise, or _ERROR_.
 alias schrodinger_time_independent_check {
@@ -158,17 +164,17 @@ alias schrodinger_time_independent_check {
     if (!($c_validate_parts($1,$2,$3,$4,$5,$6))) { return %ERR_RETURN $+ :AllPartsMustBeNumbers }
 
     var %H_psi = $c_mul($1, $2, $3, $4)
-    if (%H_psi == %ERR_RETURN) { return %ERR_RETURN }
+    if (%H_psi == %ERR_RETURN) { return %ERR_RETURN $+ :HMulPsiFailed }
     var %H_psi_r = $gettok(%H_psi, 1, 44)
     var %H_psi_i = $gettok(%H_psi, 2, 44)
 
     var %E_psi = $c_mul($5, $6, $3, $4)
-    if (%E_psi == %ERR_RETURN) { return %ERR_RETURN }
+    if (%E_psi == %ERR_RETURN) { return %ERR_RETURN $+ :EMulPsiFailed }
     var %E_psi_r = $gettok(%E_psi, 1, 44)
     var %E_psi_i = $gettok(%E_psi, 2, 44)
 
     var %difference = $c_sub(%H_psi_r, %H_psi_i, %E_psi_r, %E_psi_i)
-    if (%difference == %ERR_RETURN) { return %ERR_RETURN }
+    if (%difference == %ERR_RETURN) { return %ERR_RETURN $+ :DifferenceCalcFailed }
     var %diff_r = $gettok(%difference, 1, 44)
     var %diff_i = $gettok(%difference, 2, 44)
 
@@ -186,6 +192,7 @@ alias uncertainty_principle {
     if (!($c_validate_parts($2,$3))) { return %ERR_RETURN $+ :UncertaintiesMustBeNumbers }
     if ($2 <= 0 || $3 <= 0) { return %ERR_RETURN $+ :UncertaintiesMustBePositive }
 
+    ; Use %hbar_div_2, assuming it's globally available
     var %product = $calc($2 * $3)
     return $iif(%product >= %hbar_div_2, 1, 0)
 }
@@ -199,6 +206,7 @@ alias de_broglie_wavelength {
     if ($argc != 1) { return %ERR_RETURN $+ :InvalidArgCount }
     if (!($isnum($1))) { return %ERR_RETURN $+ :MomentumMustBeNumber }
     if ($1 == 0) { return %ERR_RETURN $+ :MomentumCannotBeZero }
+    ; Use %planck_h, assuming it's globally available
     return $calc(%planck_h / $1)
 }
 
@@ -212,6 +220,7 @@ alias fermi_dirac_distribution {
     if (!($c_validate_parts($1,$2,$3))) { return %ERR_RETURN $+ :EMuTMustBeNumbers }
     if ($3 <= 0) { return %ERR_RETURN $+ :TemperatureMustBePositive }
 
+    ; Use %kB and %epsilon, assuming they're globally available
     var %denominator_term = $calc(%kB * $3)
     if ($calc(abs(%denominator_term)) < %epsilon) { return %ERR_RETURN $+ :MathematicalSingularity }
     var %exponent_term = $calc(($1 - $2) / %denominator_term)
@@ -228,6 +237,7 @@ alias bose_einstein_distribution {
     if (!($c_validate_parts($1,$2,$3))) { return %ERR_RETURN $+ :EMuTMustBeNumbers }
     if ($3 <= 0) { return %ERR_RETURN $+ :TemperatureMustBePositive }
 
+    ; Use %kB and %epsilon, assuming they're globally available
     var %denominator_term = $calc(%kB * $3)
     if ($calc(abs(%denominator_term)) < %epsilon) { return %ERR_RETURN $+ :MathematicalSingularity }
     var %exponent_val = exp($calc(($1 - $2) / %denominator_term))
@@ -243,8 +253,9 @@ alias bose_einstein_distribution {
 alias quantum_harmonic_oscillator_energy {
     if ($argc != 2) { return %ERR_RETURN $+ :InvalidArgCount }
     if (!($c_validate_parts($1,$2))) { return %ERR_RETURN $+ :NOmegaMustBeNumbers }
-    if (!($is_non_negative_integer($1))) { return %ERR_RETURN $+ :NMustBeNonNegativeInteger } ; Optimization: Use helper for validation
-    if (!($is_positive_num($2))) { return %ERR_RETURN $+ :OmegaMustBePositive } ; Optimization: Use helper for validation
+    if (!($is_non_negative_integer($1))) { return %ERR_RETURN $+ :NMustBeNonNegativeInteger }
+    if (!($is_positive_num($2))) { return %ERR_RETURN $+ :OmegaMustBePositive }
+    ; Use %hbar, assuming it's globally available
     return $calc(%hbar * $2 * ($1 + 0.5))
 }
 
@@ -259,18 +270,19 @@ alias schrodinger_time_dependent_check {
     if ($argc != 6) { return %ERR_RETURN $+ :InvalidArgCount }
     if (!($c_validate_parts($1,$2,$3,$4,$5,$6))) { return %ERR_RETURN $+ :AllPartsMustBeNumbers }
 
+    ; Use %hbar, assuming it's globally available
     var %lhs_complex = $c_mul(0, %hbar, $1, $2)
-    if (%lhs_complex == %ERR_RETURN) { return %ERR_RETURN }
+    if (%lhs_complex == %ERR_RETURN) { return %ERR_RETURN $+ :LHSCalcFailed }
     var %lhs_r = $gettok(%lhs_complex, 1, 44)
     var %lhs_i = $gettok(%lhs_complex, 2, 44)
 
     var %rhs_complex = $c_mul($3, $4, $5, $6)
-    if (%rhs_complex == %ERR_RETURN) { return %ERR_RETURN }
+    if (%rhs_complex == %ERR_RETURN) { return %ERR_RETURN $+ :RHSCalcFailed }
     var %rhs_r = $gettok(%rhs_complex, 1, 44)
     var %rhs_i = $gettok(%rhs_complex, 2, 44)
 
     var %difference = $c_sub(%lhs_r, %lhs_i, %rhs_r, %rhs_i)
-    if (%difference == %ERR_RETURN) { return %ERR_RETURN }
+    if (%difference == %ERR_RETURN) { return %ERR_RETURN $+ :DifferenceCalcFailed }
     var %diff_r = $gettok(%difference, 1, 44)
     var %diff_i = $gettok(%difference, 2, 44)
 
@@ -294,7 +306,7 @@ alias quantum_entanglement_state {
 alias hilbert_space_dimensionality {
     if ($argc != 2) { return %ERR_RETURN $+ :InvalidArgCount }
     if (!($c_validate_parts($1,$2))) { return %ERR_RETURN $+ :DimensionalitiesMustBeNumbers }
-    if (!($is_positive_num($1)) || !($is_positive_num($2)) || $calc($1 - $round($1)) != 0 || $calc($2 - $round($2)) != 0) { ; Bug Fix: Ensure positive integer using helper
+    if (!($is_positive_num($1)) || !($is_positive_num($2)) || $calc($1 - $round($1)) != 0 || $calc($2 - $round($2)) != 0) {
         return %ERR_RETURN $+ :DimensionalitiesMustBePositiveIntegers
     }
     return $calc($1 * $2)
@@ -309,12 +321,12 @@ alias hilbert_space_dimensionality {
 alias string_theory_vibrational_modes {
     if ($argc != 5) { return %ERR_RETURN $+ :InvalidArgCount }
     if (!($c_validate_parts($1,$2,$3,$4,$5))) { return %ERR_RETURN $+ :AllParamsMustBeNumbers }
-    if (!($is_positive_num($2)) || !($is_positive_num($3))) { return %ERR_RETURN $+ :AlphaPrimeAndTTensionMustBePositive } ; Optimization: Use helper for validation
+    if (!($is_positive_num($2)) || !($is_positive_num($3))) { return %ERR_RETURN $+ :AlphaPrimeAndTTensionMustBePositive }
 
-    if (!($is_non_negative_integer($4)) || !($is_non_negative_integer($5))) { ; Bug Fix: Validate N, N_tilde as non-negative integers
+    if (!($is_non_negative_integer($4)) || !($is_non_negative_integer($5))) {
         return %ERR_RETURN $+ :NNTildeMustBeNonNegativeIntegers
     }
-
+    ; Use %pi, %hbar, assuming they're globally available
     var %term1 = $calc($1 ^ 2)
     var %term2_factor_squared = $calc((2 * %pi * $2 * $3) ^ 2)
     var %term2 = $calc(%term2_factor_squared * ($4 + $5 - 2))
@@ -329,9 +341,9 @@ alias string_theory_vibrational_modes {
 alias quantum_foam_lattice {
     if ($argc != 3) { return %ERR_RETURN $+ :InvalidArgCount }
     if (!($c_validate_parts($1,$2,$3))) { return %ERR_RETURN $+ :AllParamsMustBeNumbers }
-    if (!($is_positive_num($2))) { return %ERR_RETURN $+ :PlanckLengthMustBePositive } ; Optimization: Use helper for validation
-    if (!($is_non_negative_integer($3))) { return %ERR_RETURN $+ :JMustBeNonNegativeInteger } ; Bug Fix: Ensure j is non-negative integer
-
+    if (!($is_positive_num($2))) { return %ERR_RETURN $+ :PlanckLengthMustBePositive }
+    if (!($is_non_negative_integer($3))) { return %ERR_RETURN $+ :JMustBeNonNegativeInteger }
+    ; Use %pi, assuming it's globally available
     return $calc(8 * %pi * $1 * ($2 ^ 2) * sqrt($3 * ($3 + 1)))
 }
 
@@ -346,6 +358,7 @@ alias quantum_state_superposition {
     if ($argc != 2) { return %ERR_RETURN $+ :InvalidArgCount }
     if (!($c_validate_parts($1,$2))) { return %ERR_RETURN $+ :ProbabilitiesMustBeNumbers }
     if ($1 < 0 || $2 < 0 || $1 > 1 || $2 > 1) { return %ERR_RETURN $+ :ProbabilitiesOutOfRange }
+    ; Use %epsilon, assuming it's globally available
     if ($calc(abs($1 + $2 - 1)) > %epsilon) { return %ERR_RETURN $+ :ProbabilitiesMustSumToOne }
 
     var %random_val = $rand(1000) / 1000.0 ; Random float between 0.0 and 1.0
@@ -388,14 +401,15 @@ alias decoherence_simulation {
 alias quantum_tunneling_probability {
     if ($argc != 4) { return %ERR_RETURN $+ :InvalidArgCount }
     if (!($c_validate_parts($1,$2,$3,$4))) { return %ERR_RETURN $+ :AllParamsMustBeNumbers }
-    if (!($is_positive_num($1)) || !($is_positive_num($4))) { return %ERR_RETURN $+ :MassAndWidthMustBePositive } ; Optimization: Use helper for validation
+    if (!($is_positive_num($1)) || !($is_positive_num($4))) { return %ERR_RETURN $+ :MassAndWidthMustBePositive }
 
     var %m = $1, %E = $2, %V0 = $3, %L = $4
 
     if (%V0 <= %E) { return 1.0 }
 
+    ; Use %hbar, assuming it's globally available
     var %k_squared = $calc(2 * %m * (%V0 - %E) / (%hbar * %hbar))
-    ; Bug Fix: Check for negative argument to sqrt before calculation
+    ; Check for negative argument to sqrt before calculation
     if (%k_squared < 0) { return %ERR_RETURN $+ :NegativeValueForSqrt }
     var %k = $calc(sqrt(%k_squared))
     return $calc(exp(-2 * %k * %L))
@@ -408,10 +422,11 @@ alias quantum_tunneling_probability {
 ; Returns: Energy (Joules) or _ERROR_.
 alias photon_energy {
     if ($argc != 2) { return %ERR_RETURN $+ :InvalidArgCount }
-    if (!($is_positive_num($1))) { return %ERR_RETURN $+ :ValueMustBePositiveNumber } ; Optimization: Use helper for validation
-    ; Bug Fix: Explicitly check type string
+    if (!($is_positive_num($1))) { return %ERR_RETURN $+ :ValueMustBePositiveNumber }
+    ; Explicitly check type string
     if (!($2 == freq) && !($2 == lambda)) { return %ERR_RETURN $+ :InvalidType }
 
+    ; Use %planck_h and %c, assuming they're globally available
     if ($2 == freq) {
         return $calc(%planck_h * $1)
     } else { ; Must be lambda, already validated
@@ -428,7 +443,7 @@ alias emergent_pattern_cell {
     if ($argc != 4) { return %ERR_RETURN $+ :InvalidArgCount }
     if (!($c_validate_parts($1,$2,$3,$4))) { return %ERR_RETURN $+ :StatesAndRuleMustBeNumbers }
     if (($1 != 0 && $1 != 1) || ($2 != 0 && $2 != 1) || ($3 != 0 && $3 != 1)) { return %ERR_RETURN $+ :StatesMustBeBinary }
-    if (!($is_non_negative_integer($4)) || $4 > 255) { return %ERR_RETURN $+ :RuleMustBeInteger0To255 } ; Optimization: Use helper for validation
+    if (!($is_non_negative_integer($4)) || $4 > 255) { return %ERR_RETURN $+ :RuleMustBeInteger0To255 }
 
     var %binary_pattern = $1 $+ $2 $+ $3 ; e.g., "101"
     var %index = $base(%binary_pattern, 2, 10) ; Convert binary pattern to decimal index (0-7)
@@ -461,6 +476,7 @@ alias quantum_fidelity {
     if ($1 < 0 || $1 > 1 || $2 < 0 || $2 > 1 || $3 < 0 || $3 > 1 || $4 < 0 || $4 > 1) {
         return %ERR_RETURN $+ :ProbabilitiesOutOfRange
     }
+    ; Use %epsilon, assuming it's globally available
     if ($calc(abs($1 + $2 - 1)) > %epsilon || $calc(abs($3 + $4 - 1)) > %epsilon) {
         return %ERR_RETURN $+ :ProbabilitiesMustSumToOneEachState
     }
@@ -478,8 +494,8 @@ alias quantum_fidelity {
 alias rydberg_energy {
     if ($argc != 2) { return %ERR_RETURN $+ :InvalidArgCount }
     if (!($c_validate_parts($1,$2))) { return %ERR_RETURN $+ :NZMustBeNumbers }
-    if (!($is_positive_num($1)) || $calc($1 - $round($1)) != 0) { return %ERR_RETURN $+ :NMustBePositiveInteger } ; Optimization: Use helper for validation
-    if (!($is_positive_num($2)) || $calc($2 - $round($2)) != 0) { return %ERR_RETURN $+ :ZMustBePositiveInteger } ; Optimization: Use helper for validation
+    if (!($is_positive_num($1)) || $calc($1 - $round($1)) != 0) { return %ERR_RETURN $+ :NMustBePositiveInteger }
+    if (!($is_positive_num($2)) || $calc($2 - $round($2)) != 0) { return %ERR_RETURN $+ :ZMustBePositiveInteger }
 
     var %R_inf = 2.179872e-18 ; Rydberg constant (Joules)
     return $calc(0 - (%R_inf * ($2 ^ 2 / ($1 ^ 2))))
@@ -492,7 +508,7 @@ alias rydberg_energy {
 ; Returns: Peak wavelength in meters or _ERROR_.
 alias black_body_radiation_peak_wavelength {
     if ($argc != 1) { return %ERR_RETURN $+ :InvalidArgCount }
-    if (!($is_positive_num($1))) { return %ERR_RETURN $+ :TemperatureMustBePositiveNumber } ; Optimization: Use helper for validation
+    if (!($is_positive_num($1))) { return %ERR_RETURN $+ :TemperatureMustBePositiveNumber }
 
     var %b = 2.897771955e-3 ; Wien's displacement constant (m.K)
     return $calc(%b / $1)
@@ -540,6 +556,7 @@ alias quantum_random_number_generator {
 alias agi_neural_node_activation {
     if ($argc != 1) { return %ERR_RETURN $+ :InvalidArgCount }
     if (!($isnum($1))) { return %ERR_RETURN $+ :InputMustBeNumber }
+    ; Use %e (Euler's number), assuming it's globally available
     return $calc(1 / (1 + exp(0 - $1)))
 }
 
@@ -551,7 +568,7 @@ alias agi_neural_node_activation {
 alias agi_genetic_crossover {
     if ($argc != 3) { return %ERR_RETURN $+ :InvalidArgCount }
     if (!($is_non_negative_integer($3))) { return %ERR_RETURN $+ :CrossoverPointMustBeNonNegativeInteger }
-    ; Bug Fix: Validate gene lengths for consistency and non-zero. Also ensure genes are binary strings.
+    ; Validate gene lengths for consistency and non-zero. Also ensure genes are binary strings.
     if ($len($1) != $len($2) || $len($1) == 0 || $regsubex($1,/[^01]/g,'') != $1 || $regsubex($2,/[^01]/g,'') != $2) {
         return %ERR_RETURN $+ :GeneLengthsMustMatchAndBeNonZeroAndBinary
     }
@@ -613,7 +630,7 @@ alias quantum_tunneling_path_switch {
     if (!($isnum($1))) { return %ERR_RETURN $+ :ObservationFactorMustBeNumber }
     if ($1 < 0 || $1 > 1) { return %ERR_RETURN $+ :ObservationFactorOutOfRange }
 
-    ; Bug Fix: Corrected logic to ensure observation factor correctly biases the outcome.
+    ; Corrected logic to ensure observation factor correctly biases the outcome.
     ; If observation_factor is high, the choice becomes less random and more "forced" to a definite path.
     ; If observation_factor is 1, it's always the first choice (e.g. Path A)
     ; If observation_factor is 0, it's purely random.
@@ -659,7 +676,7 @@ alias quantum_harmonic_oscillator_energy_ext {
     if (!($c_validate_parts($1,$2,$3))) { return %ERR_RETURN $+ :NKMmustBeNumbers }
     if (!($is_non_negative_integer($1))) { return %ERR_RETURN $+ :NMustBeNonNegativeInteger }
     if (!($is_positive_num($2)) || !($is_positive_num($3))) { return %ERR_RETURN $+ :KandMMustBePositive }
-
+    ; Use %hbar, assuming it's globally available
     var %omega = $calc(sqrt($2 / $3))
     return $calc(($1 + 0.5) * %hbar * %omega)
 }
@@ -685,7 +702,7 @@ alias quantum_dot_energy_1d {
     if (!($c_validate_parts($1,$2,$3))) { return %ERR_RETURN $+ :NMLMustBeNumbers }
     if (!($is_positive_num($1)) || $calc($1 - $round($1)) != 0) { return %ERR_RETURN $+ :NMustBePositiveInteger }
     if (!($is_positive_num($2)) || !($is_positive_num($3))) { return %ERR_RETURN $+ :MandLMustBePositive }
-
+    ; Use %pi and %hbar, assuming they're globally available
     return $calc(($1 ^ 2 * %pi ^ 2 * %hbar ^ 2) / (2 * $2 * $3 ^ 2))
 }
 
@@ -711,6 +728,7 @@ alias quantum_measurement_distribution {
     if ($argc != 3) { return %ERR_RETURN $+ :InvalidArgCount }
     if (!($c_validate_parts($1,$2,$3))) { return %ERR_RETURN $+ :ProbabilitiesAndBiasMustBeNumbers }
     if ($1 < 0 || $2 < 0 || $1 > 1 || $2 > 1) { return %ERR_RETURN $+ :ProbabilitiesOutOfRange }
+    ; Use %epsilon, assuming it's globally available
     if ($calc(abs($1 + $2 - 1)) > %epsilon) { return %ERR_RETURN $+ :ProbabilitiesMustSumToOne }
     if ($3 < -1 || $3 > 1) { return %ERR_RETURN $+ :BiasOutOfRange }
 
@@ -734,10 +752,10 @@ alias agi_collective_memory_recall {
     if ($argc != 4) { return %ERR_RETURN $+ :InvalidArgCount }
     if (!($c_validate_parts($1,$2,$3,$4))) { return %ERR_RETURN $+ :StrengthsAndWeightsMustBeNumbers }
     if ($3 < 0 || $3 > 1 || $4 < 0 || $4 > 1) { return %ERR_RETURN $+ :WeightsOutOfRange }
-    if ($calc(abs($3 + $4 - 1)) > %epsilon && $calc(abs($3 + $4)) > %epsilon) { return %ERR_RETURN $+ :WeightsMustSumToOneOrZero } ; Bug Fix: Allow zero weights (no influence)
+    if ($calc(abs($3 + $4 - 1)) > %epsilon && $calc(abs($3 + $4)) > %epsilon) { return %ERR_RETURN $+ :WeightsMustSumToOneOrZero }
 
     var %total_weight = $calc($3 + $4)
-    if ($calc(abs(%total_weight)) < %epsilon) { return 0 } ; If no weight, recall is 0, not error (Optimization: Handle zero weight)
+    if ($calc(abs(%total_weight)) < %epsilon) { return 0 }
 
     return $calc((%1 * %3 + %2 * %4) / %total_weight)
 }
@@ -781,16 +799,10 @@ alias agi_self_replication_condition {
     if (($1 != 0 && $1 != 1) || ($2 != 0 && $2 != 1) || ($3 != 0 && $3 != 1)) { return %ERR_RETURN $+ :StatesMustBeBinary }
     if (!($is_non_negative_integer($4)) || $4 > 255) { return %ERR_RETURN $+ :RuleMustBeInteger0To255 }
 
-    ; We want the new center cell (from current R, L, C) to be the same as the old center,
-    ; and the new right cell (from current C, R, next_right) to be the same as the old center.
-    ; This is highly conceptual and depends on what "replication" means.
-    ; Let's simplify: if the next state of the 'center' cell, if it were the new 'right' cell,
-    ; *and* the next state of the current 'right' cell (as the new 'center' in a right-shifted view)
-    ; matches the original 'center'. This is a very loose interpretation.
-
     ; Simplest interpretation: does the next state of 'center' match current 'center'?
+    ; Requires `emergent_pattern_cell` from this or `emergent_systems.mrc`
     var %next_center_state = $emergent_pattern_cell($1, $2, $3, $4)
-    if (%next_center_state == %ERR_RETURN) { return %ERR_RETURN } ; Bug Fix: Propagate error
+    if (%next_center_state == %ERR_RETURN) { return %ERR_RETURN } ; Propagate error
 
     return $iif(%next_center_state == $2, 1, 0) ; Check if center state persists after one step
 }
@@ -803,7 +815,7 @@ alias agi_self_replication_condition {
 alias agi_global_optimization_step {
     if ($argc != 3) { return %ERR_RETURN $+ :InvalidArgCount }
     if (!($c_validate_parts($1,$2,$3))) { return %ERR_RETURN $+ :EnergiesAndTempMustBeNumbers }
-    if (!($is_positive_num($3))) { return %ERR_RETURN $+ :TemperatureMustBePositive } ; Temperature must be positive
+    if (!($is_positive_num($3))) { return %ERR_RETURN $+ :TemperatureMustBePositive }
 
     if ($2 < $1) {
         return "ACCEPT" ; Always accept better solutions
@@ -811,10 +823,9 @@ alias agi_global_optimization_step {
         ; Calculate acceptance probability for worse solutions
         ; P(accept) = exp(-(new_E - current_E) / Temperature)
         var %delta_E = $calc($2 - $1)
-        var %acceptance_prob = $calc(exp(0 - (%delta_E / $3))) ; Bug Fix: ensure exponent is negative
+        var %acceptance_prob = $calc(exp(0 - (%delta_E / $3)))
         var %random_roll = $rand(1000) / 1000.0
 
         return $iif(%random_roll <= %acceptance_prob, "ACCEPT", "REJECT")
     }
 }
-
