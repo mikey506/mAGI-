@@ -1,0 +1,2 @@
+# mAGI-
+Recusive mIRC Scripts
